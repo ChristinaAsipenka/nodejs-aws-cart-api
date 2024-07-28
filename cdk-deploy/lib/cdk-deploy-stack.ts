@@ -2,8 +2,9 @@ import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
-import { RDS_CONNECTION_URL, DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_NAME } from '../../config';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 export class CdkDeployStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -11,23 +12,26 @@ export class CdkDeployStack extends cdk.Stack {
 
     const server = new nodejs.NodejsFunction(this, 'server', {
       functionName: 'nodejs-aws-cart-api',
-      code: lambda.Code.fromAsset(path.join(__dirname, '..', '..', 'dist')),
+      code: lambda.Code.fromAsset(path.join(__dirname, '..', '..', 'dist/src')),
       handler: 'main.handler',
       timeout: cdk.Duration.seconds(30),
       memorySize: 1024,
       runtime: lambda.Runtime.NODEJS_16_X,
       environment: {
-        RDS_CONNECTION_URL: String(RDS_CONNECTION_URL),
-        DB_HOST: String(DB_HOST),
-        DB_PORT: String(DB_PORT),
-        DB_USERNAME: String(DB_USERNAME),
-        DB_PASSWORD: String(DB_PASSWORD),
-        DB_NAME: String(DB_NAME),
+        RDS_CONNECTION_URL: String(process.env.RDS_CONNECTION_URL),
+        DB_HOST: String(process.env.DB_HOST),
+        DB_PORT: String(process.env.DB_PORT),
+        DB_USERNAME: String(process.env.DB_USERNAME),
+        DB_PASSWORD: String(process.env.DB_PASSWORD),
+        DB_NAME: String(process.env.DB_NAME),
       },
       bundling: {
         externalModules: [
           '@nestjs/microservices',
           '@nestjs/websockets',
+          '@nestjs/core',
+          '@nestjs/common',
+          '@nestjs/platform-express',
           'class-transformer',
           'class-validator',
         ],
