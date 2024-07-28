@@ -1,28 +1,32 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { CartStatuses } from './index';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany,CreateDateColumn,UpdateDateColumn } from 'typeorm';
 import { CartItem } from './cart-item-model';
 
-@Entity('carts')
+export enum CartStatuses {
+    OPEN = 'OPEN',
+    STATUS = 'STATUS'
+}
+
+@Entity({ name: 'carts' })
 export class Cart {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ nullable: true })
-    user_id?: string;
+    @Column({type: 'uuid'})
+    user_id: string;
 
-    @CreateDateColumn()
-    created_at?: Date;
+    @CreateDateColumn({ type: 'timestamp' })
+    created_at: Date;
 
-    @UpdateDateColumn()
-    updated_at?: Date;
+    @UpdateDateColumn({ type: 'timestamp' })
+    updated_at: Date;
 
     @Column({
         type: 'enum',
         enum: CartStatuses,
-        default: CartStatuses.OPEN,
+        default: CartStatuses.OPEN
     })
-    status?: CartStatuses;
+    status: CartStatuses;
 
-    @OneToMany(() => CartItem, (cartItem) => cartItem.cart, { cascade: true, eager: true })
+    @OneToMany(() => CartItem, (cartItem) => cartItem.cart)
     items: CartItem[];
 }

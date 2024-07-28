@@ -1,81 +1,45 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Construct } from 'constructs';
+import { RDS_CONNECTION_URL, DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_NAME } from '../../config';
 import * as path from 'path';
-import * as dotenv from 'dotenv';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 export class CdkDeployStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const securityGroupIds = [process.env.DATABASE_SECURITY_GROUP_ID!];
-
-    const cartDB = rds.DatabaseInstance.fromDatabaseInstanceAttributes(
-        this,
-        'Cart DB',
-        {
-          instanceIdentifier: process.env.DATABASE_NAME!,
-          instanceEndpointAddress: process.env.DATABASE_HOST!,
-          instanceResourceId: process.env.DATABASE_RESOURCE_ID!,
-          port: 5432,
-          securityGroups: securityGroupIds.map((id) =>
-              ec2.SecurityGroup.fromSecurityGroupId(
-                  this,
-                  `SecurityGroup-${id}`,
-                  id,
-              ),
-          ),
-        },
-    );
-
-    const nestJSFunction = new lambda.Function(this, 'NestJSFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
+    const server = new nodejs.NodejsFunction(this, 'server', {
+      functionName: 'nodejs-aws-cart-api',
       code: lambda.Code.fromAsset(path.join(__dirname, '..', '..', 'dist')),
       handler: 'main.handler',
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 1024,
+      runtime: lambda.Runtime.NODEJS_16_X,
       environment: {
-        DB_HOST: process.env.DATABASE_HOST!,
-        DB_PORT: process.env.DATABASE_PORT!,
-        DB_NAME: process.env.DATABASE_NAME!,
-        DB_USER: process.env.DATABASE_USERNAME!,
-        DB_PASSWORD: process.env.DATABASE_PASSWORD!,
+        RDS_CONNECTION_URL: String(RDS_CONNECTION_URL),
+        DB_HOST: String(DB_HOST),
+        DB_PORT: String(DB_PORT),
+        DB_USERNAME: String(DB_USERNAME),
+        DB_PASSWORD: String(DB_PASSWORD),
+        DB_NAME: String(DB_NAME),
+      },
+      bundling: {
+        externalModules: [
+          '@nestjs/microservices',
+          '@nestjs/websockets',
+          'class-transformer',
+          'class-validator',
+        ],
       },
     });
 
-    cartDB.grantConnect(nestJSFunction, process.env.DATABASE_USERNAME!);
-
-    const api = new apigateway.RestApi(this, 'cart-api', {
-      restApiName: 'Cart Service',
-      cloudWatchRole: true,
-      defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: apigateway.Cors.DEFAULT_HEADERS,
-      },
+    // exposes the lambda function via HTTP URL
+    const { url } = server.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
+      cors: { allowedOrigins: ['*'] },
     });
 
-    const cartResource = api.root.addResource('cart');
-    const nestJSLambdaIntegration = new apigateway.LambdaIntegration(
-        nestJSFunction,
-    );
-    cartResource.addMethod('GET', nestJSLambdaIntegration);
-    cartResource.addMethod('PUT', nestJSLambdaIntegration);
-    cartResource.addMethod('DELETE', nestJSLambdaIntegration);
-
-    const checkoutResource = cartResource.addResource('checkout');
-    checkoutResource.addMethod('POST', nestJSLambdaIntegration);
-
-    const deployment = new apigateway.Deployment(this, 'Deployment', { api });
-
-    const devStage = new apigateway.Stage(this, 'dev-stage', {
-      stageName: 'dev',
-      deployment,
-    });
-
-    api.deploymentStage = devStage;
+    new cdk.CfnOutput(this, 'Url', { value: url });
   }
 }
